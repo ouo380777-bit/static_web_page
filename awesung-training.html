@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWESUNG 内部工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF6B9D',
+                        secondary: '#F8FAFC',
+                        neutral: '#F3F4F6'
+                    },
+                    fontFamily: {
+                        comic: ['Comic Neue', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 2px 8px rgba(0,0,0,0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .answer-fade { animation: fadeIn 0.2s ease-in-out; }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+            .brand-title { 
+                font-family: 'Comic Neue', sans-serif;
+                font-weight: 900; 
+                color: #FF6B9D;
+                text-shadow: 2px 2px 0 rgba(255,255,255,0.9), 3px 3px 0 rgba(255,107,157,0.1);
+                letter-spacing: 0.08em;
+            }
+            .answer-text {
+                line-height: 1.5; /* 值越小行高越紧凑 */
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-2xl">
+        <!-- 品牌标题 -->
+        <header class="text-center mb-8">
+            <h1 class="brand-title text-[clamp(2rem,6vw,2.8rem)]">AWESUNG</h1>
+            <p class="text-gray-500 text-sm md:text-base mt-1">内部员工培训 · 问答工具</p>
+        </header>
+
+        <!-- 问答列表区 -->
+        <div class="bg-white rounded-lg shadow-soft p-5">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa fa-list-alt text-primary"></i>
+                <span>问答清单（点击展开/收起答案）</span>
+            </h2>
+            <div id="qaList" class="space-y-2"></div> <!-- 更紧凑的间距 -->
+        </div>
+
+        <footer class="mt-10 text-center text-gray-400 text-xs">
+            <p>© 2025 AWESUNG. 内部工具 · 请勿外泄</p>
+        </footer>
+    </div>
+
+    <script>
+        // 替换为你的实际Excel文件URL（关键！）
+        const EXCEL_URL = 'https://ouo380777-bit.github.io/问答表.xlsx';
+        let qaData = [];
+
+        // DOM元素
+        const qaList = document.getElementById('qaList');
+
+        // 页面加载时读取Excel数据
+        document.addEventListener('DOMContentLoaded', () => {
+            loadExcelFromGitHub();
+        });
+
+        // 从GitHub读取Excel数据（增加错误处理）
+        function loadExcelFromGitHub() {
+            if (!EXCEL_URL.includes('github.io')) {
+                qaList.innerHTML = '<div class="text-red-500 text-sm p-4">请先修改EXCEL_URL为你的GitHub Pages地址</div>';
+                return;
+            }
+
+            fetch(EXCEL_URL)
+                .then(res => {
+                    if (!res.ok) throw new Error(`网络错误：${res.status}`);
+                    return res.arrayBuffer();
+                })
+                .then(data => {
+                    const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    qaData = XLSX.utils.sheet_to_json(worksheet, { header: ['question', 'answer'] });
+                    
+                    // 移除表头
+                    if (qaData[0]?.question === '问题' || qaData[0]?.question === 'Question') qaData.shift();
+                    // 过滤空数据
+                    qaData = qaData.filter(item => item.question && item.answer);
+                    
+                    renderQaList();
+                })
+                .catch(err => {
+                    qaList.innerHTML = `<div class="text-red-500 text-sm p-4">数据加载失败：${err.message}<br>请检查Excel文件URL是否正确</div>`;
+                });
+        }
+
+        // 渲染问答列表
+        function renderQaList() {
+            if (qaData.length === 0) {
+                qaList.innerHTML = '<div class="text-gray-500 text-sm p-4 text-center">暂无问答数据（请检查Excel格式）</div>';
+                return;
+            }
+
+            qaList.innerHTML = '';
+            qaData.forEach((item, index) => {
+                // 问答项容器
+                const qaItem = document.createElement('div');
+                qaItem.className = 'border border-gray-100 rounded-md overflow-hidden';
+                
+                // 问题标题栏
+                const questionHeader = document.createElement('div');
+                questionHeader.className = 'flex justify-between items-center p-3 bg-neutral hover:bg-gray-50 cursor-pointer transition-colors';
+                questionHeader.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="bg-primary/10 text-primary text-xs font-medium w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0">${index + 1}</span>
+                        <span class="text-gray-700 text-sm">${item.question}</span>
+                    </div>
+                    <i class="fa fa-chevron-down text-primary text-xs transition-transform duration-200"></i>
+                `;
+                
+                // 答案内容区（彻底清除空行和多余空格）
+                const answerContent = document.createElement('div');
+                answerContent.className = 'hidden answer-fade p-2.5 bg-white border-t border-gray-100';
+                
+                // 深度清洗答案内容
+                let cleanAnswer = item.answer || '';
+                cleanAnswer = cleanAnswer
+                    .replace(/^\s+|\s+$/g, '') // 清除首尾空白
+                    .replace(/\n+/g, '\n')     // 合并连续换行
+                    .replace(/\n/g, '<br>')    // 替换换行为br
+                    .replace(/<br><br>/g, '<br>'); // 清除连续br
+                
+                answerContent.innerHTML = `
+                    <div class="text-gray-600 text-sm pl-2 border-l-2 border-primary/30 p-0 rounded-r-sm answer-text">
+                        ${cleanAnswer || '无答案内容'}
+                    </div>
+                `;
+                
+                // 点击切换展开/收起
+                questionHeader.addEventListener('click', () => {
+                    const isHidden = answerContent.classList.contains('hidden');
+                    if (isHidden) {
+                        answerContent.classList.remove('hidden');
+                        questionHeader.querySelector('i').classList.add('rotate-180');
+                    } else {
+                        answerContent.classList.add('hidden');
+                        questionHeader.querySelector('i').classList.remove('rotate-180');
+                    }
+                });
+                
+                qaItem.appendChild(questionHeader);
+                qaItem.appendChild(answerContent);
+                qaList.appendChild(qaItem);
+            });
+        }
+    </script>
+    <!-- 引入Excel解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</body>
+</html>
+

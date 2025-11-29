@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>heaven's mini tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF6B9D',
+                        secondary: '#F8FAFC',
+                        neutral: '#F3F4F6'
+                    },
+                    fontFamily: {
+                        comic: ['Comic Neue', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 2px 8px rgba(0,0,0,0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .answer-fade { animation: fadeIn 0.2s ease-in-out; }
+            .copy-toast { animation: toastFade 2s ease-in-out; }
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes toastFade { 
+                0% { opacity: 0; transform: translateY(10px); }
+                20% { opacity: 1; transform: translateY(0); }
+                80% { opacity: 1; transform: translateY(0); }
+                100% { opacity: 0; transform: translateY(10px); }
+            }
+            .brand-title { 
+                font-family: 'Comic Neue', sans-serif;
+                font-weight: 900; 
+                color: #FF6B9D;
+                text-shadow: 2px 2px 0 rgba(255,255,255,0.9), 3px 3px 0 rgba(255,107,157,0.1);
+                letter-spacing: 0.08em;
+            }
+            .answer-text {
+                line-height: 1.6;
+                padding: 4px 0;
+            }
+            .question-text {
+                flex: 1;
+                word-break: break-word;
+                line-height: 1.4;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-2xl">
+        <!-- 品牌标题 -->
+        <header class="text-center mb-8">
+            <h1 class="brand-title text-[clamp(2rem,6vw,2.8rem)]">Verbal Hug</h1>
+            <p class="text-gray-500 text-sm md:text-base mt-1">All things pass in time. Only fleeting memories stay. Forget the undesirable, treasure the beloved forever—just as the fireworks shone that night.</p>
+        </header>
+
+        <!-- 问答列表区 -->
+        <div class="bg-white rounded-lg shadow-soft p-5">
+            <!-- 顶部操作栏 -->
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <i class="fa fa-list-alt text-primary"></i>
+                    <span>问答清单（点击展开/收起答案）</span>
+                </h2>
+                <button id="copyAllBtn" class="text-sm text-primary hover:text-primary/80 flex items-center gap-1 transition-colors">
+                    <i class="fa fa-copy"></i>
+                    <span>复制全部</span>
+                </button>
+            </div>
+            
+            <div id="qaList" class="space-y-2">
+                <div class="text-gray-500 text-sm p-4 text-center"><i class="fa fa-spinner fa-spin mr-2"></i>加载问答数据中...</div>
+            </div>
+        </div>
+
+        <!-- 复制成功提示 -->
+        <div id="copyToast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md text-sm opacity-0 copy-toast z-50 hidden">
+            <i class="fa fa-check-circle mr-2"></i>
+            <span id="toastText">复制成功</span>
+        </div>
+
+        <footer class="mt-10 text-center text-gray-400 text-xs">
+            <p>© 2025 HEAVEN. </p>
+        </footer>
+    </div>
+
+    <!-- 引入Excel解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script>
+        // 替换为你的实际Excel文件URL
+        const EXCEL_URL = 'https://ouo380777-bit.github.io/英文问答表.xlsx';
+        let qaData = [];
+
+        // DOM元素
+        const qaList = document.getElementById('qaList');
+        const copyAllBtn = document.getElementById('copyAllBtn');
+        const copyToast = document.getElementById('copyToast');
+        const toastText = document.getElementById('toastText');
+
+        // 页面加载时读取Excel数据
+        document.addEventListener('DOMContentLoaded', () => {
+            loadExcelFromGitHub();
+            copyAllBtn.addEventListener('click', copyAllContent);
+        });
+
+        // 显示复制提示
+        function showCopyToast(message = '复制成功') {
+            toastText.textContent = message;
+            copyToast.classList.remove('hidden');
+            copyToast.style.opacity = '1';
+            
+            setTimeout(() => {
+                copyToast.style.opacity = '0';
+                setTimeout(() => copyToast.classList.add('hidden'), 2000);
+            }, 2000);
+        }
+
+        // 复制单条内容
+        function copySingleContent(question, answer) {
+            const content = `Q: ${question}\nA: ${answer}`;
+            navigator.clipboard.writeText(content)
+                .then(() => showCopyToast('复制成功'))
+                .catch(() => showCopyToast('复制失败，请手动复制'));
+        }
+
+        // 复制全部内容
+        function copyAllContent() {
+            if (qaData.length === 0) {
+                showCopyToast('暂无数据可复制');
+                return;
+            }
+            
+            let allContent = '';
+            qaData.forEach((item, index) => {
+                allContent += `${index + 1}. Q: ${item.question.trim()}\n   A: ${item.answer.trim()}\n\n`;
+            });
+            
+            navigator.clipboard.writeText(allContent.trim())
+                .then(() => showCopyToast('全部内容复制成功'))
+                .catch(() => showCopyToast('复制失败，请手动复制'));
+        }
+
+        // HTML转义函数（防止XSS）
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char] || char));
+        }
+
+        // 从GitHub读取Excel数据
+        function loadExcelFromGitHub() {
+            // 基础校验
+            if (!EXCEL_URL) {
+                qaList.innerHTML = '<div class="text-red-500 text-sm p-4">请配置Excel文件URL</div>';
+                return;
+            }
+            if (!EXCEL_URL.includes('github.io')) {
+                qaList.innerHTML = '<div class="text-amber-500 text-sm p-4">建议使用GitHub Pages托管Excel文件</div>';
+            }
+            if (!EXCEL_URL.endsWith('.xlsx')) {
+                qaList.innerHTML = '<div class="text-red-500 text-sm p-4">Excel文件需为.xlsx格式</div>';
+                return;
+            }
+
+            fetch(EXCEL_URL)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP错误：${res.status} ${res.statusText}`);
+                    return res.arrayBuffer();
+                })
+                .then(data => {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+                        if (workbook.SheetNames.length === 0) throw new Error('Excel文件无工作表');
+                        
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        qaData = XLSX.utils.sheet_to_json(worksheet, { header: ['question', 'answer'] });
+                        
+                        // 处理表头
+                        if (qaData.length > 0) {
+                            const headerRow = qaData[0];
+                            if (['问题', 'Question', 'problem', '标题'].includes(headerRow.question?.trim()) || 
+                                ['答案', 'Answer', 'answer', '内容'].includes(headerRow.answer?.trim())) {
+                                qaData.shift(); // 移除表头行
+                            }
+                        }
+                        
+                        // 过滤有效数据
+                        qaData = qaData.filter(item => 
+                            item.question && item.question.trim() && 
+                            item.answer && item.answer.trim()
+                        );
+                        
+                        renderQaList();
+                    } catch (parseError) {
+                        throw new Error(`Excel解析失败：${parseError.message}`);
+                    }
+                })
+                .catch(err => {
+                    qaList.innerHTML = `<div class="text-red-500 text-sm p-4">
+                        <i class="fa fa-exclamation-circle mr-2"></i>数据加载失败：${err.message}<br>
+                        请检查：<br>
+                        1. Excel文件URL是否正确<br>
+                        2. 文件是否为.xlsx格式<br>
+                        3. 文件是否公开可访问
+                    </div>`;
+                });
+        }
+
+        // 渲染问答列表
+        function renderQaList() {
+            qaList.innerHTML = '';
+            
+            if (qaData.length === 0) {
+                qaList.innerHTML = '<div class="text-gray-500 text-sm p-4 text-center">暂无有效问答数据<br>（请检查Excel数据格式）</div>';
+                return;
+            }
+
+            qaData.forEach((item, index) => {
+                const questionText = item.question.trim();
+                const answerText = item.answer.trim();
+                
+                // 创建问答项容器
+                const qaItem = document.createElement('div');
+                qaItem.className = 'border border-gray-100 rounded-md overflow-hidden hover:shadow-sm transition-shadow';
+                
+                // 创建问题头部
+                const questionHeader = document.createElement('div');
+                questionHeader.className = 'flex justify-between items-center p-3 bg-neutral hover:bg-gray-50 cursor-pointer transition-colors active:bg-gray-100';
+                questionHeader.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="bg-primary/10 text-primary text-xs font-medium w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0">${index + 1}</span>
+                        <span class="text-gray-700 text-sm question-text">${escapeHtml(questionText)}</span>
+                    </div>
+                    <i class="fa fa-chevron-down text-primary text-xs transition-transform duration-200"></i>
+                `;
+                
+                // 创建答案内容
+                const answerContent = document.createElement('div');
+                answerContent.className = 'hidden answer-fade p-3 bg-white border-t border-gray-100';
+                
+                // 处理答案内容格式
+                let cleanAnswer = escapeHtml(answerText);
+                cleanAnswer = cleanAnswer
+                    .replace(/\n+/g, '\n')
+                    .replace(/\n/g, '<br>')
+                    .replace(/<br><br>/g, '<br>');
+                
+                // 答案区域包含复制按钮
+                answerContent.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="text-gray-600 text-sm pl-2 border-l-2 border-primary/30 p-1 rounded-r-sm answer-text flex-1">
+                            ${cleanAnswer || '无答案内容'}
+                        </div>
+                        <button class="copy-single-btn text-xs text-primary hover:text-primary/80 ml-2 mt-1 flex items-center gap-1 transition-colors" 
+                                data-question="${escapeHtml(questionText)}" 
+                                data-answer="${escapeHtml(answerText)}">
+                            <i class="fa fa-copy"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // 点击切换显示/隐藏
+                questionHeader.addEventListener('click', () => {
+                    const isHidden = answerContent.classList.contains('hidden');
+                    answerContent.classList.toggle('hidden');
+                    questionHeader.querySelector('i').classList.toggle('rotate-180');
+                });
+                
+                qaItem.appendChild(questionHeader);
+                qaItem.appendChild(answerContent);
+                qaList.appendChild(qaItem);
+            });
+            
+            // 绑定单条复制事件
+            document.querySelectorAll('.copy-single-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // 防止触发父元素的点击事件
+                    const question = btn.dataset.question;
+                    const answer = btn.dataset.answer;
+                    copySingleContent(question, answer);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
